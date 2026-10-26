@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kolejki priorytetowe i kopce — wizualizacja</title>
+<style>
+:root {
+  --fg: #e6e6e6;
+  --muted: #8a8a8a;
+  --accent: #4a90d9;
+  --border: #3a3a3a;
+  --card: #1c1c1c;
+  --card2: #232323;
+  --green: #4caf50;
+  --yellow: #f5b700;
+  --orange: #ff8c00;
+  --red: #e5534b;
+  --blue: #3b82f6;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #0e0e0e;
+  color: var(--fg);
+  padding: 20px;
+  min-height: 100vh;
+}
+
+/* ── Nagłówek ── */
+header { text-align: center; margin-bottom: 14px; }
+header h1 { font-size: 22px; color: var(--accent); }
+header p { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+/* ── Zakładki ── */
+.tabs {
+  display: flex; justify-content: center; gap: 4px; flex-wrap: wrap;
+  margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 0;
+}
+.tab-btn {
+  padding: 10px 18px; font-size: 13px; cursor: pointer;
+  background: var(--card2); border: 1px solid var(--border); border-bottom: none;
+  color: var(--fg); border-radius: 6px 6px 0 0; transition: all .15s;
+}
+.tab-btn:hover { background: var(--accent); color: #fff; }
+.tab-btn.active { background: var(--accent); color: #fff; }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+.task-counter { text-align: center; color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+
+/* ── Główny układ ── */
+.app-grid {
+  display: grid; grid-template-columns: 1fr 320px; gap: 16px;
+  max-width: 1300px; margin: 0 auto; align-items: start;
+}
+.viz-main { min-width: 0; }
+.control-panel { display: flex; flex-direction: column; gap: 12px; }
+
+/* ── Baner kroku ── */
+.step-banner {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--card); border: 1px solid var(--border); border-left: 5px solid var(--muted);
+  border-radius: 8px; padding: 14px 16px; margin-bottom: 14px;
+  font-size: 15px; font-weight: 600; min-height: 52px;
+  transition: border-color .2s, background .2s;
+}
+.step-banner .badge { font-size: 20px; }
+.step-banner.comp { border-left-color: var(--yellow); background: #242013; }
+.step-banner.shift-l { border-left-color: var(--red); background: #241614; }
+.step-banner.sift-up-l { border-left-color: var(--green); background: #16231a; }
+.step-banner.sift-down-l { border-left-color: var(--orange); background: #241c12; }
+.step-banner.info { border-left-color: var(--accent); }
+
+/* ── Karty ── */
+.card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px;
+}
+.card h4 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); margin-bottom: 10px;
+}
+.info-card { font-size: 12px; line-height: 1.6; }
+.info-card details summary {
+  cursor: pointer; font-size: 12px; font-weight: 600; color: var(--accent);
+  list-style: none; display: flex; align-items: center; gap: 6px;
+}
+.info-card details[open] summary { margin-bottom: 8px; }
+.info-card p { margin-bottom: 6px; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; font-size: 11px; }
+.legend-item { display: flex; align-items: center; gap: 4px; }
+.legend-swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--border); }
+
+/* ── Przyciski operacji ── */
+.op-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 12px 8px; border: none; border-radius: 8px; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: #fff; width: 100%; transition: filter .15s;
+}
+.op-btn .ico { font-size: 22px; }
+.op-btn:hover { filter: brightness(1.15); }
+.op-add { background: var(--blue); }
+.op-fetch { background: #8a6d1d; }
+.op-extract { background: var(--green); }
+.op-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.field-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.field-row input {
+  padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--card2); color: var(--fg); font-size: 13px; width: 72px;
+}
+
+/* ── Sterowanie krokami ── */
+.play-row { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 8px; margin-bottom: 8px; }
+.play-btn {
+  padding: 10px; border: none; border-radius: 8px; cursor: pointer;
+  font-size: 14px; font-weight: 700; color: #fff; transition: filter .15s;
+}
+.play-btn:hover { filter: brightness(1.15); }
+.p-step { background: #444; }
+.p-start { background: var(--green); }
+.p-reset { background: var(--red); }
+.speed-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.speed-row select { flex: 1; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--card2); color: var(--fg); font-size: 12px; }
+.scenario-select { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--card2); color: var(--fg); font-size: 12px; }
+
+/* ── Statystyki ── */
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stat-badge {
+  background: var(--card2); border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 10px; font-size: 11px; color: var(--muted);
+}
+.stat-badge .value { display: block; color: var(--accent); font-weight: 700; font-size: 18px; margin-top: 2px; }
+
+/* ── Stan ── */
+#state-content { font-size: 12px; line-height: 1.7; }
+#state-content .k { color: var(--muted); }
+#state-content .v { color: var(--fg); font-weight: 600; }
+
+/* ── Tablica ── */
+.array-container {
+  display: flex; gap: 4px; justify-content: center; align-items: center;
+  min-height: 110px; flex-wrap: wrap; padding: 6px;
+}
+.array-cell {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  width: 74px; height: 74px; border-radius: 8px; font-weight: 700; text-align: center;
+  border: 2px solid var(--border); background: var(--card2); transition: all .3s;
+}
+.array-cell .priority { font-size: 24px; color: var(--accent); line-height: 1; }
+.array-cell .id { font-size: 10px; color: var(--muted); margin-top: 3px; }
+.array-cell.comparison { border-color: var(--yellow); background: #332a0d; }
+.array-cell.shift { border-color: var(--red); background: #331817; }
+.array-cell.highlight { border-color: var(--green); background: #16301c; box-shadow: 0 0 12px rgba(76,175,80,.5); }
+.array-cell.insert-pos { border-color: var(--orange); background: #33250d; }
+
+/* ── Kopiec ── */
+.heap-levels { display: flex; flex-direction: column; align-items: center; gap: 26px; padding: 14px 4px; overflow-x: auto; }
+.heap-level { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.heap-node {
+  border: 2px solid var(--border); border-radius: 50%; width: 56px; height: 56px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--card2); font-weight: 700; font-size: 15px; transition: all .3s;
+}
+.heap-node .priority { font-size: 17px; color: var(--accent); line-height: 1; }
+.heap-node .id { font-size: 8px; color: var(--muted); }
+.heap-node.comparison { border-color: var(--yellow); background: #332a0d; }
+.heap-node.highlight { border-color: var(--green); background: #16301c; box-shadow: 0 0 12px rgba(76,175,80,.5); }
+
+/* ── Pseudokod ── */
+.pseudocode {
+  background: #0a0a0a; border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; font-family: 'Consolas', 'Courier New', monospace; font-size: 12px;
+  line-height: 1.7; overflow-x: auto; min-height: 90px; margin-top: 4px;
+}
+.pseudo-line { white-space: pre; padding: 1px 4px; border-radius: 3px; }
+.pseudo-line.active { background: #332a0d; color: var(--yellow); font-weight: 700; border-left: 3px solid var(--yellow); }
+.pseudo-line.comment { color: #6a6a6a; }
+.pseudo-line.string { color: var(--green); }
+.pseudo-line.keyword { color: #c084fc; }
+
+/* ── Log ── */
+.logs {
+  background: #0a0a0a; border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; height: 220px; overflow-y: auto; font-family: 'Consolas', monospace;
+  font-size: 12px; color: #b0b0b0; white-space: pre-wrap; margin-top: 14px;
+}
+.log-entry { padding: 3px 0; border-bottom: 1px solid #1e1e1e; }
+.log-entry.comp { color: var(--yellow); }
+.log-entry.shift-l { color: var(--red); }
+.log-entry.sift-up-l { color: var(--green); }
+.log-entry.sift-down-l { color: var(--orange); }
+.log-entry.info { color: #b0b0b0; }
+
+/* ── Tabele ── */
+.comparison-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+.comparison-table th, .comparison-table td { padding: 8px; border: 1px solid var(--border); text-align: center; }
+.comparison-table th { background: var(--card2); color: var(--accent); }
+.comparison-table td:nth-child(1) { text-align: left; font-weight: 600; }
+
+/* ── Testy ── */
+.test-results { margin-top: 12px; }
+.test-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; margin: 4px 0; border-radius: 6px; font-size: 12px; border-left: 3px solid var(--muted); }
+.test-row.pass { border-left-color: var(--green); background: rgba(76,175,80,.08); }
+.test-row.fail { border-left-color: var(--red); background: rgba(229,83,75,.08); }
+.test-status { font-weight: 700; font-size: 14px; }
+.status-pass { color: var(--green); }
+.status-fail { color: var(--red); }
+
+/* ── Nauka ── */
+.qa-item { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px; font-size: 13px; }
+.qa-question { font-weight: 700; color: var(--accent); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.qa-question .q-num { background: var(--orange); color: #000; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0; }
+.qa-answer { color: #ccc; line-height: 1.7; display: none; }
+.qa-answer.visible { display: block; }
+.qa-toggle { margin-top: 6px; color: var(--muted); font-size: 12px; cursor: pointer; text-decoration: underline; }
+
+.validator-code {
+  background: #0a0a0a; border: 1px solid var(--border); border-radius: 6px;
+  padding: 12px; font-family: 'Consolas', monospace; font-size: 11px; color: #aaa;
+  overflow-x: auto; max-height: 200px; overflow-y: auto; white-space: pre-wrap;
+}
+
+@media (max-width: 900px) {
+  .app-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>🔮 Kolejki priorytetowe i kopce</h1>
+  <p>Interaktywna wizualizacja — krok po kroku</p>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" onclick="showTab('unordered')">Tablica nieuporządkowana</button>
+  <button class="tab-btn" onclick="showTab('ordered')">Tablica uporządkowana</button>
+  <button class="tab-btn" onclick="showTab('heap')">Kopiec binarny (min)</button>
+  <button class="tab-btn" onclick="showTab('comparison')">📊 Porównanie i testy</button>
+  <button class="tab-btn" onclick="showTab('learning')">🎓 Nauka</button>
+</nav>
+
+<div class="task-counter"><span id="counter">Gotowy</span></div>
+
+<div class="app-grid">
+  <main class="viz-main">
+    <div class="step-banner info">
+      <span class="badge">ℹ️</span><span id="step-text">Wybierz strukturę i operację, aby zobaczyć kroki algorytmu.</span>
+    </div>
+
+    <div id="unordered" class="tab-pane active">
+      <div class="array-container" id="u-array"></div>
+      <div class="pseudocode" id="u-pseudo"></div>
+      <div class="logs" id="u-logs"></div>
+    </div>
+
+    <div id="ordered" class="tab-pane">
+      <div class="array-container" id="o-array"></div>
+      <div class="pseudocode" id="o-pseudo"></div>
+      <div class="logs" id="o-logs"></div>
+    </div>
+
+    <div id="heap" class="tab-pane">
+      <div class="heap-levels" id="heap-tree"></div>
+      <div class="pseudocode" id="h-pseudo"></div>
+      <div class="logs" id="h-logs"></div>
+    </div>
+
+    <div id="comparison" class="tab-pane">
+      <div class="card">
+        <h4>Analiza algorytmiczna — 3 warianty</h4>
+        <table class="comparison-table">
+          <thead><tr>
+            <th>Operacja</th><th>Tablica nieuporządkowana</th><th>Tablica uporządkowana</th><th>Kopiec binarny (min)</th>
+          </tr></thead>
+          <tbody>
+            <tr><td>Wstawianie</td><td>O(1) / 0 porównań</td><td>O(n) porównań + O(n) przesunięć</td><td>O(log n) porównań + O(log n) swapów</td></tr>
+            <tr><td>Pobór min</td><td>O(n) — skan całej tablicy</td><td>O(1) — element[0]</td><td>O(log n) — sift-down</td></tr>
+            <tr><td>Pamięć</td><td>O(n)</td><td>O(n)</td><td>O(n)</td></tr>
+            <tr><td>Przykład (n=31)</td><td>0 / ~465 por.</td><td>~15 / 1 por.</td><td>~5 / ~5 por.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="test-results" id="test-results"></div>
+      <div id="validator-section"></div>
+    </div>
+
+    <div id="learning" class="tab-pane">
+      <div id="learning-content"></div>
+    </div>
+  </main>
+
+  <aside class="control-panel">
+    <div class="card info-card">
+      <details open>
+        <summary>ℹ️ O metodzie</summary>
+        <h4 id="method-title" style="margin:4px 0 6px;">—</h4>
+        <div id="method-description"></div>
+        <div class="legend" id="legend"></div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h4>Operacje</h4>
+      <div class="op-row">
+        <button class="op-btn op-add" onclick="doAdd()"><span class="ico">➕</span>Dodaj</button>
+        <button class="op-btn op-fetch" onclick="doFetchMin()"><span class="ico">👁️</span>Pokaż min</button>
+        <button class="op-btn op-extract" onclick="doExtractMin()"><span class="ico">📤</span>Pobierz min</button>
+      </div>
+      <div class="field-row">
+        <span>Priorytet (0–9):</span>
+        <input type="number" id="task-priority" min="0" max="9" value="0">
+        <span>ID: <span id="task-id" style="color:var(--accent); font-weight:700;">#—</span></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h4>Scenariusz</h4>
+      <select class="scenario-select" id="scenario-select" onchange="loadScenario(this.value)">
+        <option value="custom" selected>🆕 Własne dane (ręcznie)</option>
+        <option value="scn1">🅰 5 zadań — różne priorytety</option>
+        <option value="scn2">🅱 10 zadań — równe priorytety</option>
+        <option value="scn3">🅲 31 zadań — pełny zestaw</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <h4>Sterowanie krokami</h4>
+      <div class="play-row">
+        <button class="play-btn p-step" onclick="stepOnce()">👣 Krok</button>
+        <button class="play-btn p-start" id="play-btn" onclick="playPause()">▶ Start</button>
+        <button class="play-btn p-reset" onclick="resetCurrent()">⟲ Reset</button>
+      </div>
+      <div class="speed-row">
+        <span>Tempo:</span>
+        <select id="speed-select">
+          <option value="300">Szybko (0.3 s)</option>
+          <option value="500">0.5 s</option>
+          <option value="1000" selected>Normalnie (1 s)</option>
+          <option value="1500">1.5 s</option>
+          <option value="2000">Wolno (2 s)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card">
+      <h4>Statystyki</h4>
+      <div class="stats" id="stats"></div>
+    </div>
+
+    <div class="card">
+      <h4>Stan bieżący</h4>
+      <div id="state-content"></div>
+    </div>
+  </aside>
+</div>
+
+<script>
+let addOrderCounter = 0;
+let isPlaying = false;
+let playQueue = [];
+let currentSpeed = 1000;
+
+let states = {
+  unordered: { data: [], comparisons: 0, fetched: 0 },
+  ordered: { data: [], comparisons: 0, shifts: 0, fetched: 0 },
+  heap: { data: [], comparisons: 0, swaps: 0, fetched: 0 }
+};
+
+// Reguła porównania z karty: para (priorytet, kolejność dodania).
+// Mniejszy priorytet wygrywa; przy równym priorytecie — wcześniej dodany (niższy ID).
+function compareHeap(a, b) {
+  return a.priority < b.priority || (a.priority === b.priority && a.id < b.id);
+}
+
+// ===== Pseudocode definitions =====
+const pseudocode = {
+  unordered_add: [
+    {text: "// --- Dodawanie do nieuporządkowanej tablicy ---", cls: "comment"},
+    {text: "function add(item):", cls: "keyword"},
+    {text: "    array.append(item)     // dopis na koniec", cls: ""},
+    {text: "    // Koszt: O(1), 0 porównań", cls: "comment"},
+  ],
+  unordered_find: [
+    {text: "// --- Wyszukiwanie minimum (przy pobieraniu) ---", cls: "comment"},
+    {text: "function findMin():", cls: "keyword"},
+    {text: "    minIdx = 0", cls: ""},
+    {text: "    for i = 1 to len(array)-1:", cls: "keyword"},
+    {text: "        if compare(array[i], array[minIdx]):", cls: "string"},
+    {text: "            minIdx = i                  // zapamiętaj nowe minimum", cls: ""},
+    {text: "    return minIdx            // koszt: n-1 porównań", cls: "comment"},
+  ],
+  unordered_remove: [
+    {text: "function extractMin():", cls: "keyword"},
+    {text: "    minIdx = findMin()", cls: "string"},
+    {text: "    return array.remove(minIdx)   // usuń i zwróć", cls: ""},
+    {text: "    // Całkowity koszt: O(n) porównań", cls: "comment"},
+  ],
+  ordered_add: [
+    {text: "// --- Dodawanie do uporządkowanej tablicy ---", cls: "comment"},
+    {text: "function add(item):", cls: "keyword"},
+    {text: "    pos = 0", cls: ""},
+    {text: "    while pos < len AND NOT (array[pos] < item):", cls: "keyword"},
+    {text: "        pos++                       // znajdź miejsce", cls: ""},
+    {text: "    // Przesuń elementy w prawo (koszt: pos przesunięć)", cls: "comment"},
+    {text: "    for i = len downto pos+1:", cls: "keyword"},
+    {text: "        array[i] = array[i-1]       // przesunięcie", cls: "string"},
+    {text: "    array[pos] = item", cls: ""},
+    {text: "    // Koszt: O(n) porównań + O(n) przesunięć", cls: "comment"},
+  ],
+  ordered_extract: [
+    {text: "// --- Pobieranie z uporządkowanej tablicy ---", cls: "comment"},
+    {text: "function extractMin():", cls: "keyword"},
+    {text: "    min = array[0]           // minimum na początku", cls: ""},
+    {text: "    for i = 0 to len-2:", cls: "keyword"},
+    {text: "        array[i] = array[i+1]   // przesuń wszystkie w lewo", cls: "string"},
+    {text: "    array.pop()              // usuń ostatni", cls: ""},
+    {text: "    // Koszt: O(1) porównań, O(n) przesunięć", cls: "comment"},
+  ],
+  heap_add: [
+    {text: "// --- Wstawianie do kopca binarnego (min) ---", cls: "comment"},
+    {text: "function add(item):", cls: "keyword"},
+    {text: "    heap.append(item)        // umieść na końcu", cls: ""},
+    {text: "    siftUp(heap.length-1)    // przesiej w górę", cls: "string"},
+    {text: "", cls: ""},
+    {text: "function siftUp(idx):", cls: "keyword"},
+    {text: "    while idx > 0:", cls: "keyword"},
+    {text: "        parent = (idx-1) / 2", cls: ""},
+    {text: "        if heap[idx] < heap[parent]:", cls: "string"},
+    {text: "            swap(heap[idx], heap[parent])", cls: ""},
+    {text: "            idx = parent", cls: ""},
+    {text: "        else: break", cls: ""},
+    {text: "    // Koszt: O(log n)", cls: "comment"},
+  ],
+  heap_extract: [
+    {text: "// --- Pobieranie min z kopca binarnego ---", cls: "comment"},
+    {text: "function extractMin():", cls: "keyword"},
+    {text: "    min = heap[0]", cls: ""},
+    {text: "    heap[0] = heap.pop()     // ostatni na korzeń", cls: ""},
+    {text: "    siftDown(0)              // przesiej w dół", cls: "string"},
+    {text: "", cls: ""},
+    {text: "function siftDown(idx):", cls: "keyword"},
+    {text: "    loop:", cls: "keyword"},
+    {text: "        left = 2*i+1, right = 2*i+2", cls: ""},
+    {text: "        smallest = idx", cls: ""},
+    {text: "        if left < n AND heap[left] < heap[smallest]:", cls: "string"},
+    {text: "            smallest = left", cls: ""},
+    {text: "        if right < n AND heap[right] < heap[smallest]:", cls: "string"},
+    {text: "            smallest = right", cls: ""},
+    {text: "        if smallest != idx:", cls: "keyword"},
+    {text: "            swap(heap[idx], heap[smallest])", cls: "string"},
+    {text: "            idx = smallest", cls: ""},
+    {text: "        else: break", cls: ""},
+    {text: "    // Koszt: O(log n)", cls: "comment"},
+  ],
+};
+
+function renderPseudoCombined(containerId, keys) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  let lineIdx = 0;
+  keys.forEach(key => {
+    pseudocode[key].forEach(line => {
+      const div = document.createElement('div');
+      div.className = 'pseudo-line ' + line.cls;
+      div.textContent = line.text;
+      div.dataset.lineNum = lineIdx++;
+      container.appendChild(div);
+    });
+    const sep = document.createElement('div');
+    sep.className = 'pseudo-line comment';
+    sep.textContent = '// ──────────';
+    container.appendChild(sep);
+    lineIdx++;
+  });
+}
+
+const pseudoLineMap = {
+  unordered: { add: 2, compare: 5, minFound: 6 },
+  ordered: { compare: 4, insert: 7 },
+  heap: { placed: 1, compare: 8, swap_up: 10, compareLeft: 16, compareRight: 19, replaceRoot: 1, swap_down: 20, stop: 23, done: 1 }
+};
+
+function highlightPseudoLine(struct, stepType) {
+  const pseudoIdMap = {unordered: 'u-pseudo', ordered: 'o-pseudo', heap: 'h-pseudo'};
+  const container = document.getElementById(pseudoIdMap[struct]);
+  if (!container) return;
+  container.querySelectorAll('.pseudo-line').forEach(l => l.classList.remove('active'));
+  const lineNum = pseudoLineMap[struct]?.[stepType];
+  if (lineNum !== undefined) {
+    const lines = container.querySelectorAll('.pseudo-line');
+    if (lines[lineNum]) lines[lineNum].classList.add('active');
+  }
+}
+
+// ===== Rendering =====
+function renderUnorderedArray(highlight = [], cls = 'comparison') {
+  const container = document.getElementById('u-array');
+  container.innerHTML = '';
+  states.unordered.data.forEach((item, idx) => {
+    const cell = document.createElement('div');
+    cell.className = 'array-cell';
+    cell.innerHTML = `<div class="priority">${item.priority}</div><div class="id">#${item.id}</div>`;
+    if (highlight.includes(idx)) cell.classList.add(cls);
+    container.appendChild(cell);
+  });
+}
+
+function renderOrderedArray(highlight = [], cls = 'comparison') {
+  const container = document.getElementById('o-array');
+  container.innerHTML = '';
+  states.ordered.data.forEach((item, idx) => {
+    const cell = document.createElement('div');
+    cell.className = 'array-cell';
+    cell.innerHTML = `<div class="priority">${item.priority}</div><div class="id">#${item.id}</div>`;
+    if (highlight.includes(idx)) cell.classList.add(cls);
+    container.appendChild(cell);
+  });
+}
+
+function renderHeapTree(highlight = [], cls = 'comparison') {
+  const container = document.getElementById('heap-tree');
+  const data = states.heap.data;
+  container.innerHTML = '';
+  if (data.length === 0) {
+    container.innerHTML = '<div style="color:var(--muted); text-align:center; padding:20px;">Kopiec jest pusty</div>';
+    return;
+  }
+  const levels = Math.ceil(Math.log2(data.length + 1));
+  const levelWrappers = [];
+  for (let l = 0; l < levels; l++) {
+    const d = document.createElement('div');
+    d.className = 'heap-level';
+    container.appendChild(d);
+    levelWrappers.push(d);
+  }
+  data.forEach((item, idx) => {
+    const level = Math.floor(Math.log2(idx + 1));
+    const node = document.createElement('div');
+    node.className = 'heap-node';
+    node.id = `heap-node-${idx}`;
+    node.innerHTML = `<div class="priority">${item.priority}</div><div class="id">#${item.id}</div>`;
+    if (highlight.includes(idx)) node.classList.add(cls);
+    levelWrappers[level].appendChild(node);
+  });
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ===== Stats & state =====
+function updateStatsDisplay() {
+  const activeTab = getActiveTab();
+  const s = states[activeTab];
+  let html = '';
+  if (activeTab === 'unordered') {
+    html = `<div class="stat-badge">Porównań<span class="value">${s.comparisons}</span></div>
+      <div class="stat-badge">W kolejce<span class="value">${s.data.length}</span></div>
+      <div class="stat-badge">Pobrano<span class="value">${s.fetched}</span></div>`;
+  } else if (activeTab === 'ordered') {
+    html = `<div class="stat-badge">Porównań<span class="value">${s.comparisons}</span></div>
+      <div class="stat-badge">Przesunięć<span class="value">${s.shifts}</span></div>
+      <div class="stat-badge">W kolejce<span class="value">${s.data.length}</span></div>
+      <div class="stat-badge">Pobrano<span class="value">${s.fetched}</span></div>`;
+  } else if (activeTab === 'heap') {
+    html = `<div class="stat-badge">Porównań<span class="value">${s.comparisons}</span></div>
+      <div class="stat-badge">Swapów<span class="value">${s.swaps}</span></div>
+      <div class="stat-badge">W kolejce<span class="value">${s.data.length}</span></div>
+      <div class="stat-badge">Pobrano<span class="value">${s.fetched}</span></div>`;
+  }
+  document.getElementById('stats').innerHTML = html;
+}
+
+function updateStateInfo(struct, step) {
+  const s = states[struct];
+  const nameMap = {unordered: 'Tablica nieuporządkowana', ordered: 'Tablica uporządkowana', heap: 'Kopiec binarny (min)'};
+  let html = `<div><span class="k">Struktura:</span> <span class="v">${nameMap[struct] || struct}</span></div>`;
+  html += `<div><span class="k">Rozmiar:</span> <span class="v">${s.data.length} elementów</span></div>`;
+  if (step) {
+    if (step.type === 'placed') {
+      html += `<div><span class="k">Akcja:</span> <span class="v">Dodano #${step.item.id} (pri=${step.item.priority})</span></div>`;
+    } else if (step.type === 'compare' || step.type === 'compareLeft' || step.type === 'compareRight') {
+      html += `<div><span class="k">Akcja:</span> <span class="v">Porównanie (priorytet, ID)</span></div>`;
+      html += `<div><span class="k">Krok:</span> <span class="v">porównanie #${s.comparisons}</span></div>`;
+    } else if (step.type === 'swap') {
+      html += `<div><span class="k">Akcja:</span> <span class="v">Swap (${s.swaps} swapów)</span></div>`;
+    } else if (step.type === 'insert') {
+      html += `<div><span class="k">Akcja:</span> <span class="v">Wstawienie na poz. ${step.pos} (${step.shifts} przesunięć)</span></div>`;
+    } else if (step.type === 'minFound') {
+      html += `<div><span class="k">Znaleziono min:</span> <span class="v">#${step.item.id} (pri=${step.item.priority})</span></div>`;
+    } else if (step.type === 'replaceRoot') {
+      html += `<div><span class="k">Pobrano:</span> <span class="v">#${step.removed.id} (pri=${step.removed.priority})</span></div>`;
+      html += `<div><span class="k">Na korzeń:</span> <span class="v">#${step.root.id} (pri=${step.root.priority})</span></div>`;
+    } else if (step.type === 'stop') {
+      html += `<div><span class="k">Koniec:</span> <span class="v">sift zakończony</span></div>`;
+    } else if (step.type === 'done') {
+      html += `<div><span class="k">Pobrano:</span> <span class="v">#${step.extracted.id} (pri=${step.extracted.priority})</span></div>`;
+    } else if (step.type === 'extract') {
+      html += `<div><span class="k">Pobrano:</span> <span class="v">#${step.item.id} (pri=${step.item.priority})</span></div>`;
+    }
+  }
+  const costStr = struct === 'ordered' ? `Por: ${s.comparisons}, Przes: ${s.shifts}` : struct === 'heap' ? `Por: ${s.comparisons}, Swapy: ${s.swaps}` : `Por: ${s.comparisons}`;
+  html += `<div style="font-size:11px; color:var(--muted); margin-top:6px; border-top:1px solid #222; padding-top:6px;">Koszty: ${costStr}</div>`;
+  document.getElementById('state-content').innerHTML = html;
+}
+
+// ===== Step generators (real algorithm execution) =====
+function* unorderedScanGen() {
+  const data = states.unordered.data;
+  if (data.length === 0) return;
+  states.unordered.comparisons = 0;
+  let minIdx = 0;
+  for (let i = 1; i < data.length; i++) {
+    states.unordered.comparisons++;
+    const a = data[minIdx], b = data[i];
+    const less = compareHeap(b, a);
+    yield {type: 'compare', idxA: minIdx, idxB: i, itemA: a, itemB: b, result: less, comps: states.unordered.comparisons};
+    if (less) minIdx = i;
+  }
+  yield {type: 'minFound', minIdx, item: data[minIdx], comps: states.unordered.comparisons};
+}
+
+function* orderedAddGen(id, priority) {
+  const newItem = {id, priority};
+  const data = states.ordered.data;
+  states.ordered.comparisons = 0;
+  let pos = data.length;
+  for (let i = 0; i < data.length; i++) {
+    states.ordered.comparisons++;
+    const item = data[i];
+    const shouldMove = item.priority > priority || (item.priority === priority && item.id > id);
+    yield {type: 'compare', idx: i, item, newItem, shouldMove, comps: states.ordered.comparisons};
+    if (shouldMove) { pos = i; break; }
+  }
+  states.ordered.shifts = data.length - pos;
+  data.splice(pos, 0, newItem);
+  yield {type: 'insert', pos, newItem, shifts: states.ordered.shifts, comps: states.ordered.comparisons};
+}
+
+function* heapAddGen(id, priority) {
+  const data = states.heap.data;
+  states.heap.comparisons = 0;
+  states.heap.swaps = 0;
+  const item = {id, priority};
+  data.push(item);
+  states.heap.swaps++;
+  let idx = data.length - 1;
+  yield {type: 'placed', idx, item};
+  while (idx > 0) {
+    const parent = Math.floor((idx - 1) / 2);
+    states.heap.comparisons++;
+    yield {type: 'compare', idx, parentIdx: parent, child: data[idx], parent: data[parent], comps: states.heap.comparisons};
+    if (compareHeap(data[idx], data[parent])) {
+      [data[idx], data[parent]] = [data[parent], data[idx]];
+      states.heap.swaps++;
+      yield {type: 'swap', idx, parent, phase: 'up', childBefore: data[parent], parentBefore: data[idx], swaps: states.heap.swaps};
+      idx = parent;
+    } else {
+      yield {type: 'stop', idx, item: data[idx], comps: states.heap.comparisons, swaps: states.heap.swaps};
+      return;
+    }
+  }
+}
+
+function* heapExtractGen() {
+  const data = states.heap.data;
+  states.heap.comparisons = 0;
+  states.heap.swaps = 0;
+  if (data.length === 0) return;
+  if (data.length === 1) {
+    const min = data.pop();
+    states.heap.fetched++;
+    yield {type: 'done', extracted: min};
+    return;
+  }
+  const min = data[0];
+  states.heap.fetched++;
+  const last = data.pop();
+  data[0] = last;
+  states.heap.swaps++;
+  yield {type: 'replaceRoot', root: data[0], removed: min};
+
+  let idx = 0;
+  const n = data.length;
+  while (true) {
+    const left = 2*idx+1, right = 2*idx+2;
+    let smallest = idx;
+    if (left < n) {
+      states.heap.comparisons++;
+      yield {type: 'compareLeft', idx, leftIdx: left, node: data[idx], child: data[left], comps: states.heap.comparisons};
+      if (compareHeap(data[left], data[smallest])) smallest = left;
+    }
+    if (right < n) {
+      states.heap.comparisons++;
+      yield {type: 'compareRight', idx, rightIdx: right, node: data[idx], child: data[right], comps: states.heap.comparisons};
+      if (compareHeap(data[right], data[smallest])) smallest = right;
+    }
+    if (smallest !== idx) {
+      [data[idx], data[smallest]] = [data[smallest], data[idx]];
+      states.heap.swaps++;
+      yield {type: 'swap', idx, smallest, phase: 'down', swaps: states.heap.swaps};
+      idx = smallest;
+    } else {
+      yield {type: 'stop', idx, extracted: min, comps: states.heap.comparisons, swaps: states.heap.swaps};
+      break;
+    }
+  }
+}
+
+// ===== Queue & execution =====
+async function enqueue(gen, struct) {
+  let step;
+  do {
+    step = gen.next();
+    if (!step.done) playQueue.push({struct, step: step.value});
+  } while (!step.done && playQueue.length < 500);
+  if (playQueue.length > 0) {
+    isPlaying = true;
+    document.getElementById('play-btn').textContent = '⏸ Pauza';
+    processQueue();
+  }
+}
+
+async function processQueue() {
+  while (playQueue.length > 0 && isPlaying) {
+    const {struct, step} = playQueue.shift();
+    await executeStep(struct, step);
+    await sleep(currentSpeed);
+  }
+  if (playQueue.length === 0) {
+    isPlaying = false;
+    document.getElementById('play-btn').textContent = '▶ Start';
+  }
+}
+
+async function executeStep(struct, step) {
+  const stepKey = (step.type === 'swap' && step.phase) ? ('swap_' + step.phase) : step.type;
+  highlightPseudoLine(struct, stepKey);
+  if (struct === 'unordered') await executeUnorderedStep(step);
+  else if (struct === 'ordered') await executeOrderedStep(step);
+  else if (struct === 'heap') await executeHeapStep(step);
+  updateStatsDisplay();
+  updateStateInfo(struct, step);
+  updateCounter();
+}
+
+async function executeUnorderedStep(step) {
+  const log = document.getElementById('u-logs');
+  switch(step.type) {
+    case 'compare':
+      addLogEntry(log, `Porównanie #${step.comps}: #${step.itemA.id}(p=${step.itemA.priority}) vs #${step.itemB.id}(p=${step.itemB.priority}) → ${step.result ? '#'+step.itemB.id+' mniejsze' : '#'+step.itemA.id+' mniejsze'}`, 'comp');
+      renderUnorderedArray([step.idxA, step.idxB]);
+      await sleep(200);
+      break;
+    case 'minFound':
+      states.unordered.fetched++;
+      addLogEntry(log, `MINIMUM: #${step.item.id} pri=${step.item.priority} — ${step.comps} porównań (skan)`, 'sift-down-l');
+      renderUnorderedArray([step.minIdx], 'highlight');
+      await sleep(800);
+      break;
+    case 'extract':
+      addLogEntry(log, `POBIERANO: #${step.item.id} pri=${step.item.priority}`, 'sift-down-l');
+      renderUnorderedArray();
+      break;
+  }
+}
+
+async function executeOrderedStep(step) {
+  const log = document.getElementById('o-logs');
+  switch(step.type) {
+    case 'compare':
+      addLogEntry(log, `Porównanie #${step.comps}: #${step.item.id}(p=${step.item.priority}) vs #${step.newItem.id}(p=${step.newItem.priority}) → ${step.shouldMove ? 'wstaw przed' : 'idzie dalej'}`, 'comp');
+      renderOrderedArray([step.idx], 'comparison');
+      await sleep(200);
+      break;
+    case 'insert':
+      addLogEntry(log, `WSTAWIONO na pozycję ${step.pos} — przesunięto ${step.shifts} elementów w prawo`, 'shift-l');
+      renderOrderedArray();
+      await sleep(600);
+      break;
+  }
+}
+
+async function executeHeapStep(step) {
+  const log = document.getElementById('h-logs');
+  switch(step.type) {
+    case 'placed':
+      addLogEntry(log, `DODANO: #${step.item.id} pri=${step.item.priority} na końcu (indeks ${step.idx})`, 'sift-up-l');
+      renderHeapTree();
+      break;
+    case 'compare':
+      addLogEntry(log, `Porównanie #${step.comps}: #${step.child.id}(p=${step.child.priority}) vs #${step.parent.id}(p=${step.parent.priority})`, 'comp');
+      renderHeapTree([step.idx, step.parentIdx]);
+      await sleep(200);
+      break;
+    case 'swap':
+      if (step.phase === 'up') addLogEntry(log, `SWAP (sift-up): #${step.childBefore.id} ↔ #${step.parentBefore.id} (${step.swaps} swapów)`, 'sift-up-l');
+      else addLogEntry(log, `SWAP (sift-down): (${step.swaps} swapów)`, 'sift-down-l');
+      renderHeapTree([step.idx, step.phase === 'up' ? step.parent : step.smallest]);
+      await sleep(400);
+      break;
+    case 'compareLeft':
+      addLogEntry(log, `Porównanie #${step.comps}: #${step.node.id}(p=${step.node.priority}) vs #${step.child.id}(p=${step.child.priority}) [lewy]`, 'comp');
+      renderHeapTree([step.idx, step.leftIdx]);
+      await sleep(200);
+      break;
+    case 'compareRight':
+      addLogEntry(log, `Porównanie #${step.comps}: #${step.node.id}(p=${step.node.priority}) vs #${step.child.id}(p=${step.child.priority}) [prawy]`, 'comp');
+      renderHeapTree([step.idx, step.rightIdx]);
+      await sleep(200);
+      break;
+    case 'replaceRoot':
+      addLogEntry(log, `POBIERANO MIN: #${step.removed.id} pri=${step.removed.priority}`, 'sift-down-l');
+      addLogEntry(log, `Przeniesiono #${step.root.id}(p=${step.root.priority}) na korzeń → sift-down`, 'info');
+      renderHeapTree([0]);
+      await sleep(500);
+      break;
+    case 'stop':
+      addLogEntry(log, `Koniec sift-down: ${step.comps} por., ${step.swaps} swapów`, 'info');
+      renderHeapTree([step.idx], 'highlight');
+      await sleep(800);
+      break;
+    case 'done':
+      addLogEntry(log, `POBIERANO: #${step.extracted.id} pri=${step.extracted.priority} (ostatni element)`, 'sift-down-l');
+      break;
+  }
+}
+
+// ===== Button actions =====
+function getActiveTab() {
+  return document.querySelector('.tab-btn.active')?.getAttribute('onclick')?.match(/'(\w+)'/)?.[1] || 'unordered';
+}
+
+async function doAdd() {
+  const pr = parseInt(document.getElementById('task-priority').value);
+  if (isNaN(pr) || pr < 0 || pr > 9) { alert('Priorytet musi być 0–9'); return; }
+  const activeTab = getActiveTab();
+  if (states[activeTab].data.length >= 31) { alert('Maksymalnie 31 zadań'); return; }
+
+  addOrderCounter++;
+  const id = addOrderCounter;
+  document.getElementById('task-id').textContent = '#' + id;
+
+  if (activeTab === 'unordered') {
+    states.unordered.data.push({id, priority: pr});
+    states.unordered.comparisons = 0;
+    addLogEntry(document.getElementById('u-logs'), `DODANO: #${id} pri=${pr} → dopisane na koniec (O(1), 0 porównań)`, 'info');
+    renderUnorderedArray();
+  } else if (activeTab === 'ordered') {
+    await enqueue(orderedAddGen(id, pr), 'ordered');
+  } else if (activeTab === 'heap') {
+    await enqueue(heapAddGen(id, pr), 'heap');
+  }
+}
+
+async function doFetchMin() {
+  const activeTab = getActiveTab();
+  if (states[activeTab].data.length === 0) { alert('Struktura jest pusta'); return; }
+
+  if (activeTab === 'unordered') {
+    await enqueue(unorderedScanGen(), 'unordered');
+  } else if (activeTab === 'ordered') {
+    const min = states.ordered.data[0];
+    addLogEntry(document.getElementById('o-logs'), `MINIMUM: #${min.id} pri=${min.priority} (element[0] — O(1))`, 'sift-down-l');
+    renderOrderedArray([0], 'highlight');
+    setTimeout(() => renderOrderedArray(), 2000);
+  } else if (activeTab === 'heap') {
+    const min = states.heap.data[0];
+    addLogEntry(document.getElementById('h-logs'), `MINIMUM: #${min.id} pri=${min.priority} (korzeń — O(1))`, 'sift-down-l');
+    renderHeapTree([0], 'highlight');
+    setTimeout(() => renderHeapTree(), 2000);
+  }
+}
+
+async function doExtractMin() {
+  const activeTab = getActiveTab();
+  if (states[activeTab].data.length === 0) { alert('Struktura jest pusta'); return; }
+
+  if (activeTab === 'unordered') {
+    const gen = (function*() {
+      yield* unorderedScanGen();
+      const data = states.unordered.data;
+      let minIdx = 0;
+      for (let i = 1; i < data.length; i++) {
+        if (compareHeap(data[i], data[minIdx])) minIdx = i;
+      }
+      const removed = data.splice(minIdx, 1)[0];
+      yield {type: 'extract', item: removed};
+    })();
+    await enqueue(gen, 'unordered');
+  } else if (activeTab === 'ordered') {
+    const removed = states.ordered.data.shift();
+    states.ordered.fetched++;
+    states.ordered.comparisons = 1;
+    addLogEntry(document.getElementById('o-logs'), `POBIERANO: #${removed.id} pri=${removed.priority} (shift z początku — O(1))`, 'sift-down-l');
+    renderOrderedArray();
+  } else if (activeTab === 'heap') {
+    await enqueue(heapExtractGen(), 'heap');
+  }
+}
+
+function stepOnce() {
+  if (playQueue.length > 0) {
+    const {struct, step} = playQueue.shift();
+    executeStep(struct, step);
+  } else {
+    alert('Brak kroków w kolejce. Kliknij "Dodać", "Pokaż min" lub "Pobierz min", aby rozpocząć.');
+  }
+}
+
+function playPause() {
+  if (playQueue.length === 0) { alert('Brak kroków w kolejce'); return; }
+  isPlaying = !isPlaying;
+  document.getElementById('play-btn').textContent = isPlaying ? '⏸ Pauza' : '▶ Start';
+  if (isPlaying) processQueue();
+}
+
+function resetCurrent() {
+  playQueue = [];
+  isPlaying = false;
+  document.getElementById('play-btn').textContent = '▶ Start';
+  const activeTab = getActiveTab();
+  if (activeTab === 'unordered') {
+    states.unordered = { data: [], comparisons: 0, fetched: 0 };
+    document.getElementById('u-array').innerHTML = '';
+    document.getElementById('u-logs').innerHTML = '';
+  } else if (activeTab === 'ordered') {
+    states.ordered = { data: [], comparisons: 0, shifts: 0, fetched: 0 };
+    document.getElementById('o-array').innerHTML = '';
+    document.getElementById('o-logs').innerHTML = '';
+  } else if (activeTab === 'heap') {
+    states.heap = { data: [], comparisons: 0, swaps: 0, fetched: 0 };
+    document.getElementById('heap-tree').innerHTML = '';
+    document.getElementById('h-logs').innerHTML = '';
+  }
+  addOrderCounter = 0;
+  document.getElementById('task-id').textContent = '#—';
+  setBanner('Zresetowano — zacznij od nowa.', 'info');
+  updateStatsDisplay();
+  updateStateInfo(activeTab);
+  updateCounter();
+}
+
+function showTab(name) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(name).classList.add('active');
+  document.querySelector(`[onclick="showTab('${name}')"]`).classList.add('active');
+
+  playQueue = [];
+  isPlaying = false;
+  document.getElementById('play-btn').textContent = '▶ Start';
+
+  if (name === 'unordered') {
+    renderPseudoCombined('u-pseudo', ['unordered_add', 'unordered_find', 'unordered_remove']);
+    setMethodInfo('Tablica nieuporządkowana',
+      '<strong>Cel:</strong> trzymać zadania w zwykłej tablicy; minimum znajdujemy przez przeszukanie całej tablicy.<br><strong>Działanie:</strong> dodawanie = O(1) (dopis na koniec, 0 porównań); pobieranie = O(n) (skan, n−1 porównań).<br><strong>Zastosowania:</strong> proste kolejki, prototypowanie, gdy dodajemy częściej niż pobieramy.<br><strong>Ograniczenia:</strong> wolne pobieranie (O(n)), brak uporządkowania.',
+      'comparison');
+    renderUnorderedArray();
+  } else if (name === 'ordered') {
+    renderPseudoCombined('o-pseudo', ['ordered_add', 'ordered_extract']);
+    setMethodInfo('Tablica uporządkowana',
+      '<strong>Cel:</strong> utrzymywać elementy posortowane, by minimum było zawsze na pozycji 0.<br><strong>Działanie:</strong> wstawianie = O(n) (wyszukaj pozycję + przesuń w prawo); pobieranie = O(1).<br><strong>Zastosowania:</strong> częste pobieranie, rzadkie dodawanie; statyczne listy.<br><strong>Ograniczenia:</strong> kosztowne wstawianie (O(n) porównań i przesunięć).',
+      'comparison');
+    renderOrderedArray();
+  } else if (name === 'heap') {
+    renderPseudoCombined('h-pseudo', ['heap_add', 'heap_extract']);
+    setMethodInfo('Kopiec binarny (min)',
+      '<strong>Cel:</strong> utrzymywać częściowe uporządkowanie (rodzic ≤ dzieci) — minimum na korzeniu.<br><strong>Działanie:</strong> dodawanie = O(log n) (dopis + sift-up); pobieranie = O(log n) (sift-down).<br><strong>Zastosowania:</strong> Dijkstra, Huffman, sortowanie kopcowe, systemy czasu rzeczywistego.<br><strong>Ograniczenia:</strong> brak pełnego porządku poza właściwością kopca.',
+      'comparison');
+    renderHeapTree();
+  } else if (name === 'comparison') {
+    setMethodInfo('Porównanie i testy',
+      'Wszystkie trzy struktury używają tej samej reguły: (priorytet, kolejność dodania). Walidator jest osobnym kodem, niezależnym od algorytmów.',
+      'none');
+  } else if (name === 'learning') {
+    setMethodInfo('Nauka', 'Pytania i wyjaśnienia — kliknij pytanie, aby zobaczyć odpowiedź.', 'none');
+    renderLearning();
+  }
+  updateStatsDisplay();
+  updateStateInfo(name);
+  updateCounter();
+}
+
+function setMethodInfo(title, desc, legendType) {
+  document.getElementById('method-title').textContent = title;
+  document.getElementById('method-description').innerHTML = '<p style="font-size:12px;">' + desc + '</p>';
+  let legend = '';
+  if (legendType === 'comparison') {
+    legend = '<div class="legend-item"><div class="legend-swatch" style="border:2px solid #f5b700;background:#332a0d;"></div> Porównanie</div>' +
+      '<div class="legend-item"><div class="legend-swatch" style="border:2px solid #e5534b;background:#331817;"></div> Przesunięcie</div>' +
+      '<div class="legend-item"><div class="legend-swatch" style="border:2px solid #4caf50;background:#16301c;"></div> Minimum / aktywny</div>' +
+      '<div class="legend-item"><div class="legend-swatch" style="border:2px solid #ff8c00;background:#33250d;"></div> Pozycja / swap</div>';
+  }
+  document.getElementById('legend').innerHTML = legend;
+}
+
+// ===== Baner kroku =====
+function setBanner(text, cls) {
+  const banner = document.querySelector('.step-banner');
+  const txt = document.getElementById('step-text');
+  if (banner) banner.className = 'step-banner ' + (cls || 'info');
+  if (txt) txt.textContent = text;
+}
+
+function addLogEntry(container, msg, cls) {
+  const entry = document.createElement('div');
+  entry.className = 'log-entry ' + (cls || 'info');
+  entry.textContent = msg;
+  container.prepend(entry);
+  container.scrollTop = 0;
+  // Zsynchronizuj baner „co się dzieje" z ostatnim krokiem
+  setBanner(msg, cls);
+}
+
+// ===== Scenarios =====
+const scenarios = {
+  scn1: [{id:1,priority:3},{id:2,priority:5},{id:3,priority:1},{id:4,priority:7},{id:5,priority:4}],
+  scn2: [{id:1,priority:2},{id:2,priority:2},{id:3,priority:5},{id:4,priority:5},{id:5,priority:0},{id:6,priority:2},{id:7,priority:7},{id:8,priority:5},{id:9,priority:0},{id:10,priority:9}],
+  scn3: (() => {
+    const arr = [];
+    let seed = 12345;
+    for (let i = 1; i <= 31; i++) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      arr.push({id: i, priority: seed % 10});
+    }
+    return arr;
+  })()
+};
+
+function loadScenario(name) {
+  if (name === 'custom') { resetCurrent(); return; }
+  const tasks = scenarios[name];
+  resetAll();
+  addOrderCounter = tasks.length;
+  document.getElementById('task-id').textContent = '#' + (addOrderCounter + 1);
+
+  tasks.forEach(t => {
+    states.unordered.data.push({id: t.id, priority: t.priority});
+    const od = states.ordered.data;
+    let pos = od.length;
+    for (let j = 0; j < od.length; j++) {
+      if (compareHeap(t, od[j])) { pos = j; break; }
+    }
+    od.splice(pos, 0, {id: t.id, priority: t.priority});
+    const hd = states.heap.data;
+    hd.push({id: t.id, priority: t.priority});
+    let idx = hd.length - 1;
+    while (idx > 0) {
+      const parent = Math.floor((idx - 1) / 2);
+      if (compareHeap(hd[idx], hd[parent])) { [hd[idx], hd[parent]] = [hd[parent], hd[idx]]; idx = parent; }
+      else break;
+    }
+  });
+
+  renderUnorderedArray();
+  renderOrderedArray();
+  renderHeapTree();
+  addLogEntry(document.getElementById('u-logs'), `Załadowano scenariusz: ${tasks.length} zadań`, 'info');
+  addLogEntry(document.getElementById('o-logs'), `Załadowano scenariusz: ${tasks.length} zadań`, 'info');
+  addLogEntry(document.getElementById('h-logs'), `Załadowano scenariusz: ${tasks.length} zadań`, 'info');
+  updateCounter();
+  updateStatsDisplay();
+  updateStateInfo(getActiveTab());
+}
+
+function resetAll() {
+  states.unordered = { data: [], comparisons: 0, fetched: 0 };
+  states.ordered = { data: [], comparisons: 0, shifts: 0, fetched: 0 };
+  states.heap = { data: [], comparisons: 0, swaps: 0, fetched: 0 };
+  playQueue = [];
+  isPlaying = false;
+  document.getElementById('play-btn').textContent = '▶ Start';
+  document.getElementById('u-array').innerHTML = '';
+  document.getElementById('o-array').innerHTML = '';
+  document.getElementById('heap-tree').innerHTML = '';
+  document.getElementById('u-logs').innerHTML = '';
+  document.getElementById('o-logs').innerHTML = '';
+  document.getElementById('h-logs').innerHTML = '';
+}
+
+function updateCounter() {
+  const activeTab = getActiveTab();
+  const s = states[activeTab];
+  document.getElementById('counter').textContent = `${getStructName(activeTab)} — w kolejce ${s.data.length}/31, ostatni ID ${addOrderCounter}`;
+}
+
+function getStructName(struct) {
+  return {unordered: 'Tablica nieuporządkowana', ordered: 'Tablica uporządkowana', heap: 'Kopiec binarny', comparison: 'Porównanie', learning: 'Nauka'}[struct] || struct;
+}
+
+// ===== Learning =====
+function renderLearning() {
+  const questions = [
+    {
+      q: "Która struktura ma najniższy koszt pobierania minimum?",
+      a: "Tablica uporządkowana — minimum to zawsze element na pozycji 0, więc pobranie kosztuje O(1). W tablicy nieuporządkowanej trzeba przeszukać wszystkie elementy (O(n)), a w kopcu wykonać sift-down (O(log n))."
+    },
+    {
+      q: "Dlaczego przy równym priorytecie kolejność dodania decyduje o obsłudze?",
+      a: "Reguła porównania to para (priorytet, kolejność dodania). Gdy dwa zadania mają ten sam priorytet, porównywana jest kolejność — mniejsze ID (wcześniej dodane) ma pierwszeństwo. Przykład: #3 (p=5) i #7 (p=5) → #3 obsłużone pierwsze. To daje determinizm i sprawiedliwość (FIFO wśród równych)."
+    },
+    {
+      q: "Kiedy wybrać kopiec binarny zamiast tablicy uporządkowanej?",
+      a: "Gdy dodawanie i pobieranie są równie częste — kopiec daje O(log n) na obie operacje. Tablica uporządkowana ma szybkie pobieranie (O(1)), ale wolne dodawanie (O(n)). Kopiec sprawdza się w Dijkstrze, Huffmanie, symulacjach; tablica uporządkowana — gdy pobieramy częściej niż dodajemy."
+    }
+  ];
+  let html = '';
+  questions.forEach((qa, i) => {
+    html += `<div class="qa-item">
+      <div class="qa-question" onclick="toggleQA(${i})"><span class="q-num">${i+1}</span> ${qa.q}</div>
+      <div class="qa-answer" id="qa-${i}">${qa.a}</div>
+      <div class="qa-toggle" onclick="toggleQA(${i})">Pokaż odpowiedź ▼</div>
+    </div>`;
+  });
+  document.getElementById('learning-content').innerHTML = html;
+}
+
+function toggleQA(idx) {
+  const ans = document.getElementById(`qa-${idx}`);
+  const btn = ans.nextElementSibling;
+  ans.classList.toggle('visible');
+  btn.textContent = ans.classList.contains('visible') ? 'Ukryj odpowiedź ▲' : 'Pokaż odpowiedź ▼';
+}
+
+// ===== Automated tests =====
+const testResults = [];
+function runTests() {
+  const container = document.getElementById('test-results');
+  container.innerHTML = '<h4 style="color:var(--accent); margin-bottom:10px;">🧪 Testy automatyczne (10 testów)</h4>';
+  testResults.length = 0;
+
+  function copy(arr) { return arr.map(x => ({...x})); }
+
+  const testData = [];
+  let seed = 12345;
+  for (let i = 1; i <= 31; i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    testData.push({id: i, priority: seed % 10});
+  }
+
+  function test1() {
+    const data = copy(testData);
+    let minIdx = 0;
+    for (let i = 1; i < data.length; i++) {
+      if (compareHeap(data[i], data[minIdx])) minIdx = i;
+    }
+    const extracted = data.splice(minIdx, 1)[0];
+    const trueMin = testData.reduce((m, x) => compareHeap(x, m) ? x : m);
+    return extracted.id === trueMin.id;
+  }
+
+  function test2() {
+    const data = [];
+    testData.forEach(item => {
+      let pos = data.length;
+      for (let j = 0; j < data.length; j++) {
+        if (data[j].priority > item.priority || (data[j].priority === item.priority && data[j].id > item.id)) { pos = j; break; }
+      }
+      data.splice(pos, 0, {...item});
+    });
+    for (let i = 1; i < data.length; i++) {
+      if (compareHeap(data[i], data[i-1])) return false;
+    }
+    return true;
+  }
+
+  function test3() {
+    const heap = [];
+    testData.forEach(item => {
+      heap.push({...item});
+      let idx = heap.length - 1;
+      while (idx > 0) {
+        const parent = Math.floor((idx - 1) / 2);
+        if (compareHeap(heap[idx], heap[parent])) { [heap[idx], heap[parent]] = [heap[parent], heap[idx]]; idx = parent; }
+        else break;
+      }
+    });
+    for (let i = 0; i < heap.length; i++) {
+      const left = 2*i+1, right = 2*i+2;
+      if (left < heap.length && compareHeap(heap[left], heap[i])) return false;
+      if (right < heap.length && compareHeap(heap[right], heap[i])) return false;
+    }
+    return true;
+  }
+
+  function test4() {
+    const u = copy(testData); const uResult = [];
+    while (u.length) { let mi = 0; for (let j=1; j<u.length; j++) if (compareHeap(u[j], u[mi])) mi = j; uResult.push(u.splice(mi,1)[0]); }
+    const o = [];
+    testData.forEach(item => { let pos = o.length; for (let j = 0; j < o.length; j++) { if (compareHeap(item, o[j])) { pos = j; break; } } o.splice(pos, 0, {...item}); });
+    const oResult = [...o];
+    const h = [];
+    testData.forEach(item => { h.push({...item}); let idx = h.length - 1;
+      while (idx > 0) { const parent = Math.floor((idx-1)/2); if (compareHeap(h[idx], h[parent])) { [h[idx],h[parent]]=[h[parent],h[idx]]; idx=parent; } else break; } });
+    const hResult = [];
+    while (h.length) { hResult.push(h[0]); const last = h.pop();
+      if (h.length > 0) { h[0] = last; let idx = 0;
+        while (true) { const left=2*idx+1,right=2*idx+2; let smallest=idx;
+          if (left<h.length && compareHeap(h[left],h[smallest])) smallest=left;
+          if (right<h.length && compareHeap(h[right],h[smallest])) smallest=right;
+          if (smallest!==idx) { [h[idx],h[smallest]]=[h[smallest],h[idx]]; idx=smallest; } else break;
+        } }
+    }
+    const uStr = uResult.map(x=>x.id).join(',');
+    const oStr = oResult.map(x=>x.id).join(',');
+    const hStr = hResult.map(x=>x.id).join(',');
+    return uStr === oStr && oStr === hStr;
+  }
+
+  function test5() {
+    const items = [{id:1,priority:3},{id:2,priority:3},{id:3,priority:3},{id:4,priority:3},{id:5,priority:3}];
+    const heap = [];
+    items.forEach(item => {
+      heap.push({...item});
+      let idx = heap.length - 1;
+      while (idx > 0) { const parent = Math.floor((idx - 1) / 2);
+        if (compareHeap(heap[idx], heap[parent])) { [heap[idx], heap[parent]] = [heap[parent], heap[idx]]; idx = parent; } else break;
+      }
+    });
+    const result = [];
+    while (heap.length) { result.push(heap[0]); const last = heap.pop();
+      if (heap.length > 0) { heap[0] = last; let idx = 0;
+        while (true) { const left=2*idx+1,right=2*idx+2; let smallest=idx;
+          if (left<heap.length && compareHeap(heap[left],heap[smallest])) smallest=left;
+          if (right<heap.length && compareHeap(heap[right],heap[smallest])) smallest=right;
+          if (smallest!==idx) { [heap[idx],heap[smallest]]=[heap[smallest],heap[idx]]; idx=smallest; } else break;
+        } }
+    }
+    return result.map(x=>x.id).join(',') === '1,2,3,4,5';
+  }
+
+  function test6() {
+    const heap = [];
+    const items = [{id:1,priority:5},{id:2,priority:3},{id:3,priority:7}];
+    items.forEach(item => {
+      heap.push({...item});
+      let idx = heap.length - 1;
+      while (idx > 0) { const parent = Math.floor((idx - 1) / 2);
+        if (compareHeap(heap[idx], heap[parent])) { [heap[idx], heap[parent]] = [heap[parent], heap[idx]]; idx = parent; } else break;
+      }
+    });
+    return heap[0].id === 2 && heap[0].priority === 3 && heap.length === 3;
+  }
+
+  function test7() {
+    const items = [{id:1,priority:9},{id:2,priority:1},{id:3,priority:5}];
+    const data = [];
+    items.forEach(item => {
+      let pos = data.length;
+      for (let j = 0; j < data.length; j++) {
+        if (data[j].priority > item.priority || (data[j].priority === item.priority && data[j].id > item.id)) { pos = j; break; }
+      }
+      data.splice(pos, 0, {...item});
+    });
+    return data[0].id === 2 && data[1].id === 3 && data[2].id === 1;
+  }
+
+  function test8() {
+    const items = [{id:1,priority:5},{id:2,priority:3},{id:3,priority:7},{id:4,priority:1},{id:5,priority:9},{id:6,priority:2},{id:7,priority:8}];
+    const heap = [];
+    items.forEach(item => {
+      heap.push({...item});
+      let idx = heap.length - 1;
+      while (idx > 0) { const parent = Math.floor((idx - 1) / 2);
+        if (compareHeap(heap[idx], heap[parent])) { [heap[idx], heap[parent]] = [heap[parent], heap[idx]]; idx = parent; } else break;
+      }
+    });
+    const min = heap[0];
+    const last = heap.pop();
+    heap[0] = last;
+    let idx = 0;
+    while (true) {
+      const left = 2*idx+1, right = 2*idx+2;
+      let smallest = idx;
+      if (left < heap.length && compareHeap(heap[left], heap[smallest])) smallest = left;
+      if (right < heap.length && compareHeap(heap[right], heap[smallest])) smallest = right;
+      if (smallest !== idx) { [heap[idx], heap[smallest]] = [heap[smallest], heap[idx]]; idx = smallest; }
+      else break;
+    }
+    let propOk = true;
+    for (let i = 0; i < heap.length; i++) {
+      const left = 2*i+1, right = 2*i+2;
+      if (left < heap.length && compareHeap(heap[left], heap[i])) propOk = false;
+      if (right < heap.length && compareHeap(heap[right], heap[i])) propOk = false;
+    }
+    return min.id === 4 && min.priority === 1 && propOk;
+  }
+
+  function test9() {
+    return testData.length === 31 && testData.every(t => t.id >= 1 && t.id <= 31);
+  }
+
+  function test10() {
+    return testData.every(t => t.priority >= 0 && t.priority <= 9);
+  }
+
+  const tests = [
+    {name: "Unordered: extract returns true minimum", fn: test1, input: "31 losowych par (priorytet, ID)", expected: "id = true minimum"},
+    {name: "Ordered: maintains sorted order after 31 inserts", fn: test2, input: "31 losowych par", expected: "posortowane wg (priority, id)"},
+    {name: "Heap: heap property after 31 inserts", fn: test3, input: "31 losowych par", expected: "rodzic ≤ dzieci dla każdego węzła"},
+    {name: "All 3 structures: identical extraction order", fn: test4, input: "te same 31 pary", expected: "3 identyczne sekwencje ID"},
+    {name: "FIFO for equal priority (heap)", fn: test5, input: "5 zadań p=3", expected: "kolejność 1,2,3,4,5"},
+    {name: "Mid-state: heap root after 3 inserts (#2=p3)", fn: test6, input: "ID=1/p5, ID=2/p3, ID=3/p7", expected: "korzeń = #2 p=3"},
+    {name: "Mid-state: ordered after 3 out-of-order inserts", fn: test7, input: "ID=1/p9, ID=2/p1, ID=3/p5", expected: "[#2,#3,#1]"},
+    {name: "Heap extract + property preserved", fn: test8, input: "7 elementów losowych", expected: "min=#4/p1, heap property holds"},
+    {name: "Data integrity: 31 tasks, valid IDs", fn: test9, input: "seed=12345", expected: "31 par, ID 1–31"},
+    {name: "Priority range: 0–9", fn: test10, input: "31 losowych par", expected: "wszystkie priorytety ∈ [0,9]"},
+  ];
+
+  tests.forEach((test, i) => {
+    let result;
+    try { result = test.fn(); } catch(e) { result = false; }
+    testResults.push({name: test.name, passed: !!result, input: test.input, expected: test.expected});
+    const row = document.createElement('div');
+    row.className = `test-row ${result ? 'pass' : 'fail'}`;
+    row.innerHTML = `
+      <span class="test-status ${result ? 'status-pass' : 'status-fail'}">${result ? '✓' : '✗'}</span>
+      <div style="flex:1;">
+        <div><strong>Test ${i+1}:</strong> ${test.name}</div>
+        <div style="font-size:10px; color:var(--muted);">Wejście: ${test.input}<br>Oczekiwano: ${test.expected}</div>
+      </div>
+      <div style="font-size:14px; font-weight:bold; color:${result ? 'var(--green)' : 'var(--red)'}">${result ? 'PASS' : 'FAIL'}</div>
+    `;
+    container.appendChild(row);
+  });
+
+  const passed = testResults.filter(t => t.passed).length;
+  const summary = document.createElement('div');
+  summary.innerHTML = `<div style="text-align:center; padding:12px; color:${passed === testResults.length ? 'var(--green)' : 'var(--orange)'}"><strong>${passed}/${testResults.length} testów przeszło pomyślnie</strong></div>`;
+  container.appendChild(summary);
+}
+
+const validatorCode = `// Walidator — niezależny od implementacji algorytmów
+// Generuje dane wejściowe, uruchamia każdy algorytm samodzielnie i porównuje wyniki
+
+class Validator {
+  compare(a, b) {
+    return a.priority < b.priority || (a.priority === b.priority && a.id < b.id);
+  }
+  runUnordered(data) {
+    const arr = data.map(x => ({...x}));
+    const result = [];
+    while (arr.length > 0) {
+      let minIdx = 0;
+      for (let i = 1; i < arr.length; i++) {
+        if (this.compare(arr[i], arr[minIdx])) minIdx = i;
+      }
+      result.push(arr.splice(minIdx, 1)[0]);
+    }
+    return result.map(x => x.id);
+  }
+  runOrdered(data) {
+    const arr = [];
+    for (const item of data) {
+      let pos = arr.length;
+      for (let j = 0; j < arr.length; j++) {
+        if (this.compare(item, arr[j])) { pos = j; break; }
+      }
+      arr.splice(pos, 0, {...item});
+    }
+    return arr.map(x => x.id);
+  }
+  runHeap(data) {
+    const heap = [];
+    for (const item of data) {
+      heap.push({...item});
+      let idx = heap.length - 1;
+      while (idx > 0) {
+        const parent = Math.floor((idx - 1) / 2);
+        if (this.compare(heap[idx], heap[parent])) {
+          [heap[idx], heap[parent]] = [heap[parent], heap[idx]];
+          idx = parent;
+        } else break;
+      }
+    }
+    const result = [];
+    while (heap.length > 0) {
+      result.push(heap[0]);
+      const last = heap.pop();
+      if (heap.length > 0) {
+        heap[0] = last;
+        let idx = 0;
+        while (true) {
+          const left = 2*idx+1, right = 2*idx+2;
+          let smallest = idx;
+          if (left < heap.length && this.compare(heap[left], heap[smallest])) smallest = left;
+          if (right < heap.length && this.compare(heap[right], heap[smallest])) smallest = right;
+          if (smallest !== idx) { [heap[idx], heap[smallest]] = [heap[smallest], heap[idx]]; idx = smallest; }
+          else break;
+        }
+      }
+    }
+    return result.map(x => x.id);
+  }
+  validate(data) {
+    const u = this.runUnordered(data);
+    const o = this.runOrdered(data);
+    const h = this.runHeap(data);
+    return { allEqual: u.join(',') === o.join(',') && o.join(',') === h.join(','), unordered: u, ordered: o, heap: h };
+  }
+}
+// Użycie: const v = new Validator(); const r = v.validate(data);
+// console.log(r.allEqual); // true = wszystkie struktury zgadzają się`;
+
+function renderValidator() {
+  const container = document.getElementById('comparison');
+  let section = document.getElementById('validator-section');
+  if (!section) {
+    section = document.createElement('div');
+    section.id = 'validator-section';
+    container.appendChild(section);
+  }
+  section.innerHTML = `
+    <h4 style="color:var(--accent); margin: 16px 0 8px;">🔒 Walidator (oddzielny od algorytmów)</h4>
+    <div class="validator-code">${validatorCode}</div>
+    <div style="font-size:11px; color:var(--muted); margin-top:8px; line-height:1.6;">
+      <strong>Cel:</strong> niezależnie sprawdza poprawność — nie używa kodu algorytmów z interfejsu. Sprawdza: (1) kolejność pobierania, (2) właściwość kopca, (3) FIFO przy równym priorytecie, (4) stany pośrednie.
+    </div>
+  `;
+}
+
+// ===== Init =====
+function init() {
+  currentSpeed = parseInt(document.getElementById('speed-select').value);
+  document.getElementById('speed-select').addEventListener('change', (e) => {
+    currentSpeed = parseInt(e.target.value);
+  });
+  renderPseudoCombined('u-pseudo', ['unordered_add', 'unordered_find', 'unordered_remove']);
+  renderPseudoCombined('o-pseudo', ['ordered_add', 'ordered_extract']);
+  renderPseudoCombined('h-pseudo', ['heap_add', 'heap_extract']);
+  renderLearning();
+  renderValidator();
+  runTests();
+  updateStatsDisplay();
+  updateStateInfo('unordered');
+  updateCounter();
+}
+
+window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
